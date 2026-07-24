@@ -47,12 +47,10 @@ def _search_schema(schema, matcher):
         values.extendleft(value.values())
 
 
-def _match_keyword(keyword):
-    def matcher(value):
+def _match_id_keywords(value):
+    for keyword in ("id", "$id"):
         if keyword in value:
-            yield value
-
-    return matcher
+            yield keyword, value
 
 
 @dataclass
@@ -65,10 +63,13 @@ class RefResolver:
     _cache: Any = field(init=True, default=None)
     _cache_cfn_pointer: Any = field(init=True, default=None)
     _subschemas_cache: Any = field(init=False, default=None)
+    _document_id_cache: Any = field(init=False, default=None)
     store: Any = field(init=True, default=None)
 
     def __post_init__(self):
         self._scopes_stack = [self.base_uri]
+        if self._document_id_cache is None:
+            self._document_id_cache = {}
         if self._cache is None:
             self._cache = lru_cache(1024)(self.resolve_from_url)
         if self._cache_cfn_pointer is None:
@@ -268,11 +269,9 @@ class RefResolver:
         if not fragment:
             return document
 
-        def find(key):
-            yield from _search_schema(document, _match_keyword(key))
-
-        for keyword in ["id", "$id"]:
-            for subschema in find(keyword):
+        id_cache = self._get_document_id_cache(document)
+        for keyword in ("id", "$id"):
+            for subschema in id_cache[keyword]:
                 if "#" + fragment == subschema[keyword]:
                     return subschema
 
@@ -295,6 +294,27 @@ class RefResolver:
                 ) from e
 
         return document
+
+    def _get_document_id_cache(self, document):
+        """
+        Cache the ``id``/``$id`` subschema search for a given document.
+
+        ``resolve_fragment`` is invoked repeatedly (once per distinct
+        fragment) against the same handful of documents (``self.referrer``
+        or entries in ``self.store``), and each call used to re-walk the
+        entire document from scratch looking for ``id``/``$id`` keywords.
+        Documents are treated as immutable for the lifetime of this
+        resolver, so the search results are memoized per document
+        identity.
+        """
+        key = id(document)
+        cache = self._document_id_cache.get(key)
+        if cache is None:
+            cache = {"id": [], "$id": []}
+            for keyword, subschema in _search_schema(document, _match_id_keywords):
+                cache[keyword].append(subschema)
+            self._document_id_cache[key] = cache
+        return cache
 
     def _get_subschemas_cache(self):
         if self._subschemas_cache is not None:
