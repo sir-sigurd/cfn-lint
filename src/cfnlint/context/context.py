@@ -34,6 +34,10 @@ if TYPE_CHECKING:
 
 _PSEUDOPARAMS_NON_REGION = ["AWS::AccountId", "AWS::NoValue", "AWS::StackName"]
 
+# sentinel used to detect a missing key in ref_values without confusing it
+# with a legitimately stored `None` value
+_NO_REF_VALUE = object()
+
 
 @dataclass
 class Transforms:
@@ -205,6 +209,31 @@ class Context:
         Create a new context without merging together attributes
         """
         cls = self.__class__
+
+        # Many evolve() calls pass kwargs that are already equal to the
+        # current value (e.g. re-asserting the same path, or a ref_values
+        # update that adds nothing new).  Detect that case up front and
+        # return `self` instead of paying for a full clone: Context is
+        # frozen and its container fields are never mutated in place
+        # outside of evolve()'s own copy-on-write handling, so aliasing is
+        # safe and also preserves any already-computed cached_property
+        # (e.g. module_names) on self.
+        is_noop = True
+        for k, v in kwargs.items():
+            if k == "ref_values":
+                if v and any(
+                    self.ref_values.get(rk, _NO_REF_VALUE) != rv
+                    for rk, rv in v.items()
+                ):
+                    is_noop = False
+                    break
+                continue
+            if getattr(self, k) != v:
+                is_noop = False
+                break
+
+        if is_noop:
+            return self
 
         if "ref_values" in kwargs:
             new_ref_values = self.ref_values.copy()
