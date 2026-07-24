@@ -97,6 +97,19 @@ def equal(one, two):
     Specifically in JSON Schema, evade `bool` inheriting from `int`,
     recursing into sequences to do the same.
     """
+    # Fast path for the overwhelmingly common case (e.g. enum checks):
+    # both operands are plain strings. This is provably equivalent to the
+    # generic logic below (same boolean-string handling), it just avoids
+    # redundant isinstance()/str()/lower() calls on the hot path.
+    if isinstance(one, str) and isinstance(two, str):
+        if one == two:
+            return True
+        lo1 = one.lower()
+        lo2 = two.lower()
+        if lo1 in ("true", "false") or lo2 in ("true", "false"):
+            return bool_compare(one, two)
+        return False
+
     # Handle boolean string comparisons (CloudFormation accepts "true"/"false" strings)
     if isinstance(one, (bool, str)) and isinstance(two, (bool, str)):
         # Check if either is a boolean string
