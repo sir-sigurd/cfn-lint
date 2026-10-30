@@ -339,6 +339,15 @@ def create(
             >>> validator.evolve(schema={"type": "number"})
             StandardValidator(schema={'type': 'number'}, format_checker=None)
             """
+            # If every provided kwarg already matches the current value this
+            # is a no-op clone (a common pattern, e.g. `validator.evolve()`
+            # with no changes at all) -- skip the allocation and reuse self.
+            for k, v in kwargs.items():
+                if getattr(self, k) != v:
+                    break
+            else:
+                return self
+
             cls = self.__class__
             for f in fields(Validator):
                 if f.init:
