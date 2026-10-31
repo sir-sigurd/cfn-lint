@@ -333,12 +333,19 @@ def create(
 
             Preserves all other attributes, so can be used to e.g. create a
             validator with a different schema but with the same :kw:`$ref`
-            resolution behavior.
+            resolution behavior. Returns self when every kwarg is the
+            current value, so callers must not mutate the result in place.
 
             >>> validator = StandardValidator({})
             >>> validator.evolve(schema={"type": "number"})
             StandardValidator(schema={'type': 'number'}, format_checker=None)
             """
+            for k, v in kwargs.items():
+                if getattr(self, k) is not v:
+                    break
+            else:
+                return self
+
             cls = self.__class__
             for f in fields(Validator):
                 if f.init:

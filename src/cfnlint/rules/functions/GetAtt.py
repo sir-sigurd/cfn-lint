@@ -97,11 +97,6 @@ class GetAtt(BaseFn):
                             yield err
                             continue
 
-                        evolved = validator.evolve(schema=s)  # type: ignore
-                        evolved.validators = {  # type: ignore
-                            "type": validator.validators.get("type"),  # type: ignore
-                        }
-
                         getatts = validator.cfn.get_valid_getatts()
                         t = validator.context.resources[resource_name].type
                         pointer = getatts.match(region, [resource_name, attribute_name])

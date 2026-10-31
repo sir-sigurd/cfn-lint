@@ -94,7 +94,8 @@ class Path:
 
     def descend(self, **kwargs) -> "Path":
         """
-        Create a new Path by appending values
+        Create a new Path by appending values, or return self when
+        there is nothing to append
         """
         cls = self.__class__
 
@@ -102,6 +103,9 @@ class Path:
             raise ValueError(f"{kwargs['cfn_path']!r} cannot be in 'cfn_path'")
         elif isinstance(kwargs.get("cfn_path"), int):
             raise ValueError(f"{kwargs['cfn_path']!r} cannot be an integer")
+
+        if all(v is None for v in kwargs.values()):
+            return self
 
         for f in fields(Path):
             if kwargs.get(f.name) is not None:
@@ -203,9 +207,18 @@ class Context:
 
     def evolve(self, **kwargs) -> "Context":
         """
-        Create a new context without merging together attributes
+        Create a new context without merging together attributes, or
+        return self when every kwarg is the current value. Callers must
+        not mutate the result in place.
         """
         cls = self.__class__
+
+        # ref_values always copies: callers mutate the result's ref_values.
+        for k, v in kwargs.items():
+            if k == "ref_values" or getattr(self, k) is not v:
+                break
+        else:
+            return self
 
         if "ref_values" in kwargs:
             new_ref_values = self.ref_values.copy()
