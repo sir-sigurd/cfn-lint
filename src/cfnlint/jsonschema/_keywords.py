@@ -279,6 +279,10 @@ def enum(
         if all(not (equal(unbooled, unbool(each))) for each in enums):
             yield ValidationError(f"{instance!r} is not one of {enums!r}")
     else:
+        # A str found by plain membership is equal() to that element, so the
+        # per-element loop is only needed when membership fails.
+        if isinstance(instance, str) and isinstance(enums, list) and instance in enums:
+            return
         if all(not (equal(instance, each)) for each in enums):
             yield ValidationError(f"{instance!r} is not one of {enums!r}")
 
